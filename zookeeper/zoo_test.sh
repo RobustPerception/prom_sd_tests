@@ -2,6 +2,8 @@
 
 # Assuming machine has Go environment, ZooKeeper, and Git.
 
+set -ex
+
 # Create znode and add relevant target data.
 /usr/share/zookeeper/bin/zkCli.sh -server localhost:2181 <<EOF
 create /demo some_value
@@ -10,6 +12,7 @@ quit
 EOF
 
 # Download, untar, configure, and run Prometheus.
+go get github.com/prometheus/prometheus/cmd/...
 git clone https://github.com/prometheus/prometheus.git
 cd prometheus/
 make build
@@ -24,13 +27,14 @@ scrape_configs:
         paths:
           - '/demo'
 EOF
-./prometheus &
+./prometheus --log.level=erorr &
+sleep 7
 
 # Query Prometheus to see if expected target is found.
-curl -s http://localhost:9090/api/v1/targets | jq -r '.data.activeTargets[0].discoveredLabels.job'
 res=`curl -s http://localhost:9090/api/v1/targets | jq -r '.data.activeTargets[0].discoveredLabels.job'`
 if [ $res = 'zookeeper' ]; then
-    echo "woohoo"
+        pkill prometheus
         exit 0
 fi
+pkill prometheus
 exit 1
