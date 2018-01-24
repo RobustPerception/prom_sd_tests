@@ -3,8 +3,6 @@
 set -ex
 
 go get github.com/prometheus/prometheus/cmd/...
-git clone https://github.com/prometheus/prometheus.git
-cd prometheus/
 make build
 cat << EOF > prometheus.yml
 global:
