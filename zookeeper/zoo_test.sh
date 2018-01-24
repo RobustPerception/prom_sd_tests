@@ -13,8 +13,6 @@ EOF
 
 # Download, untar, configure, and run Prometheus.
 go get github.com/prometheus/prometheus/cmd/...
-git clone https://github.com/prometheus/prometheus.git
-cd prometheus/
 make build
 cat << EOF > prometheus.yml
 global:
@@ -28,7 +26,7 @@ scrape_configs:
           - '/demo'
 EOF
 ./prometheus --log.level=erorr &
-sleep 7
+sleep 10
 
 # Query Prometheus to see if expected target is found.
 res=`curl -s http://localhost:9090/api/v1/targets | jq -r '.data.activeTargets[0].discoveredLabels.job'`
