@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project>
+  <actions/>
+  <description></description>
+  <keepDependencies>false</keepDependencies>
+  <properties/>
+  <scm class="hudson.plugins.git.GitSCM" plugin="git@3.7.0">
+    <configVersion>2</configVersion>
+    <userRemoteConfigs>
+      <hudson.plugins.git.UserRemoteConfig>
+        <url>https://github.com/prometheus/prometheus.git</url>
+      </hudson.plugins.git.UserRemoteConfig>
+    </userRemoteConfigs>
+    <branches>
+      <hudson.plugins.git.BranchSpec>
+        <name>*/master</name>
+      </hudson.plugins.git.BranchSpec>
+    </branches>
+    <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
+    <submoduleCfg class="list"/>
+    <extensions/>
+  </scm>
+  <canRoam>true</canRoam>
+  <disabled>false</disabled>
+  <blockBuildWhenDownstreamBuilding>false</blockBuildWhenDownstreamBuilding>
+  <blockBuildWhenUpstreamBuilding>false</blockBuildWhenUpstreamBuilding>
+  <triggers/>
+  <concurrentBuild>false</concurrentBuild>
+  <builders>
+    <hudson.tasks.Shell>
+      <command>#!/bin/bash
+
+# Assuming machine has Go environment, ZooKeeper, and Git.
+
+set -ex
+
+# Create znode and add relevant target data.
+/usr/share/zookeeper/bin/zkCli.sh -server localhost:2181 &lt;&lt;EOF
+create /demo some_value
+create /demo/key1 &apos;{ &quot;serviceEndpoint&quot;: {&quot;host&quot;: &quot;127.0.0.1&quot;, &quot;port&quot;: 9090}, &quot;status&quot;:&quot;grand&quot;, &quot;shard&quot;:1  }&apos;
+quit
+EOF
+
+# Download, untar, configure, and run Prometheus.
+go get github.com/prometheus/prometheus/cmd/...
+make build
+cat &lt;&lt; EOF &gt; prometheus.yml
+global:
+  scrape_interval: 1s
+scrape_configs:
+  - job_name: &apos;zookeeper&apos;
+    serverset_sd_configs:
+      - servers:
+          - &apos;localhost:2181&apos;
+        paths:
+          - &apos;/demo&apos;
+EOF
+./prometheus &amp;
+sleep 10
+
+# Query Prometheus to see if expected target is found.
+res=`curl -s http://localhost:9090/api/v1/targets | jq -r &apos;.data.activeTargets[0].discoveredLabels.job&apos;`
+if [ $res = &apos;zookeeper&apos; ]; then
+        kill -9 $!
+        exit 0
+fi
+kill -9 $!
+exit 1</command>
+    </hudson.tasks.Shell>
+  </builders>
+  <publishers>
+    <hudson.plugins.ws__cleanup.WsCleanup plugin="ws-cleanup@0.34">
+      <patterns class="empty-list"/>
+      <deleteDirs>false</deleteDirs>
+      <skipWhenFailed>false</skipWhenFailed>
+      <cleanWhenSuccess>true</cleanWhenSuccess>
+      <cleanWhenUnstable>true</cleanWhenUnstable>
+      <cleanWhenFailure>true</cleanWhenFailure>
+      <cleanWhenNotBuilt>true</cleanWhenNotBuilt>
+      <cleanWhenAborted>true</cleanWhenAborted>
+      <notFailBuild>false</notFailBuild>
+      <cleanupMatrixParent>false</cleanupMatrixParent>
+      <externalDelete></externalDelete>
+    </hudson.plugins.ws__cleanup.WsCleanup>
+  </publishers>
+  <buildWrappers>
+    <hudson.plugins.ws__cleanup.PreBuildCleanup plugin="ws-cleanup@0.34">
+      <deleteDirs>false</deleteDirs>
+      <cleanupParameter></cleanupParameter>
+      <externalDelete></externalDelete>
+    </hudson.plugins.ws__cleanup.PreBuildCleanup>
+    <org.jenkinsci.plugins.golang.GolangBuildWrapper plugin="golang@1.2">
+      <goVersion>Go 1.9.3</goVersion>
+    </org.jenkinsci.plugins.golang.GolangBuildWrapper>
+  </buildWrappers>
+</project>
